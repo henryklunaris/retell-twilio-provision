@@ -1,15 +1,18 @@
 {
-  "_comment": "Merge these deny rules into your project's .claude/settings.json (or ~/.claude/settings.json) to stop Claude Code from reading .env files. Read(...) denies cover the file tools; the Bash(...) denies cover shell workarounds like `cat .env`. Deny rules always win over allow rules and across scopes.",
+  "_comment": "Merge these deny rules into your project's .claude/settings.json (or ~/.claude/settings.json) to stop Claude Code from reading secrets: .env files AND the retell-sip-*.local.json files this skill writes generated SIP credentials to. Read(...) denies cover the file tools; the Bash(...) denies cover shell workarounds like `cat`. Deny rules always win over allow rules and across scopes.",
   "permissions": {
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(**/.env)",
       "Read(**/.env.*)",
+      "Read(./retell-sip-*.local.json)",
+      "Read(**/retell-sip-*.local.json)",
       "Bash(cat .env*)",
       "Bash(grep .env*)",
       "Bash(head .env*)",
       "Bash(tail .env*)",
+      "Bash(cat retell-sip-*)",
       "Bash(printenv)",
       "Bash(env)"
     ]

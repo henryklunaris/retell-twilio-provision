@@ -14,18 +14,22 @@ few commands the agent runs for you.
 Via [skills.sh](https://skills.sh):
 
 ```bash
-npx skills add <your-github-user>/retell-twilio-provision
+npx skills add henryklunaris/retell-twilio-provision
 ```
 
-> ⚠️ Known issue: `npx skills add` may install into `~/.agents/skills/` while Claude
-> Code reads `~/.claude/skills/`. If Claude doesn't see the skill, install manually:
+> ⚠️ **You MUST select "Claude Code" in the agent picker.** `npx skills` is a
+> cross-agent tool — it lists ~72 agents and defaults to a neutral `~/.agents/skills/`
+> path that **Claude Code does not read**. When it asks *"Which agents do you want to
+> install to?"*, scroll to **Claude Code** and toggle it (spacebar) before confirming.
+>
+> If Claude still doesn't see it, install manually (always works):
 >
 > ```bash
-> git clone https://github.com/<your-github-user>/retell-twilio-provision \
->   ~/.claude/skills/retell-twilio-provision
+> git clone https://github.com/henryklunaris/retell-twilio-provision /tmp/rtp \
+>   && cp -R /tmp/rtp/skills/retell-twilio-provision ~/.claude/skills/
 > ```
 >
-> (or copy the folder there). Restart Claude Code afterward.
+> Restart Claude Code afterward — skills load at session start.
 
 **2. Add your API keys**
 

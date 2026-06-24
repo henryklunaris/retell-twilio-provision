@@ -17,7 +17,7 @@
  *   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, RETELL_API_KEY
  */
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -279,10 +279,44 @@ try {
       sipPassword: args['sip-pass'],
       agentId: args['agent-id'],
     });
+
+    // SECURITY: never print the SIP password to stdout — that would leak it into
+    // terminal logs and, if run by an AI agent, into the agent's context. When
+    // Twilio generated fresh credentials, write them to a local 0600 file; in all
+    // cases redact the password before printing the result.
+    const printable = { ...result };
+    let savedFile = null;
+    if (result.generatedCredentials && result.sipPassword) {
+      const last4 = result.e164.replace(/[^0-9]/g, '').slice(-4);
+      savedFile = join(process.cwd(), `retell-sip-${last4}.local.json`);
+      writeFileSync(
+        savedFile,
+        JSON.stringify(
+          {
+            number: result.e164,
+            agentId: result.agentId,
+            trunkSid: result.trunkSid,
+            terminationUri: result.terminationUri,
+            sipUsername: result.sipUsername,
+            sipPassword: result.sipPassword,
+          },
+          null,
+          2,
+        ) + '\n',
+        { mode: 0o600 },
+      );
+      printable.sipUsername = '[written to file]';
+      printable.credentialsFile = savedFile;
+    }
+    // Redact the password no matter where it came from (generated OR passed via --sip-pass).
+    if (printable.sipPassword) printable.sipPassword = '[hidden]';
+
     console.log('\n--- RESULT ---');
-    console.log(JSON.stringify(result, null, 2));
-    if (result.generatedCredentials) {
-      console.log('\n⚠️  SAVE sipUsername + sipPassword now — Twilio never returns the password again.');
+    console.log(JSON.stringify(printable, null, 2));
+    if (savedFile) {
+      console.log(`\n🔒 SIP credentials written to ${savedFile}`);
+      console.log('   They were NOT printed above, so they stay out of logs / AI context.');
+      console.log('   Keep that file safe and gitignore it. Twilio will not show the password again.');
     }
   } else {
     console.log(

@@ -40,9 +40,12 @@ Set these in a `.env` file in the project (the user owns this file — never ope
   only need the variable *names*, never the values.
 - Always run the script with **`node --env-file=.env`** so Node injects the secrets
   directly into the process — they never enter your context or the chat.
-- This skill ships `templates/settings.json` with deny rules that block reading
-  `.env`. Offer to merge it into the project's `.claude/settings.json` so the user is
-  protected by default (see "Protect the user's .env" below).
+- **Never read the `retell-sip-*.local.json` files.** On provision, the script writes
+  the generated SIP credentials to such a file (so the password never hits stdout /
+  your context). Tell the user the file path; never open or print its contents.
+- This skill ships `templates/settings.json` with deny rules that block reading `.env`
+  AND `retell-sip-*.local.json`. Offer to merge it into the project's
+  `.claude/settings.json` so the user is protected by default (see below).
 
 ## How to run it
 
@@ -73,11 +76,16 @@ four steps.
    node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX --agent-id agent_...
    ```
 
-The `provision` step prints a result JSON. If `generatedCredentials` is `true`,
-**save `sipUsername` + `sipPassword`** — Twilio never returns the password again. To
-re-run later (or add another number to the same trunk), pass them back with
-`--sip-user` / `--sip-pass`. Omitting `--agent-id` provisions the number outbound-only
-(no agent bound).
+The `provision` step prints a redacted result JSON. When Twilio generates fresh SIP
+credentials, the script **writes them to a local `retell-sip-<last4>.local.json` file
+(mode 0600) instead of printing them** — so the password stays out of logs and your
+context. Point the user to that file and tell them to keep it safe + gitignore it
+(Twilio never returns the password again). To re-run later (or add another number to
+the same trunk), pass the saved values back with `--sip-user` / `--sip-pass`. Omitting
+`--agent-id` provisions the number outbound-only (no agent bound).
+
+> ⚠️ Do **not** open or `cat` the `retell-sip-*.local.json` file — it holds the live
+> SIP password. The user already has it; you never need its contents.
 
 ## Critical gotchas
 
