@@ -14,14 +14,16 @@
    returns the password again, so the script prints it and you save it.
 
 4. **Ensure an Origination URL** points at `sip:sip.retellai.com` so the trunk is fully
-   formed (carrier-level inbound path). This skill does not bind a Retell inbound
-   webhook/agent — it's outbound-only.
+   formed (carrier-level inbound path).
 
 5. **Attach the number to the trunk.**
 
-6. **Import the number into Retell** with `termination_uri` + `sip_trunk_auth_*`. From
-   here the number can place outbound calls via any of your Retell agents (pass the
-   `override_agent_id` at call time in `create-phone-call`).
+6. **Import the number into Retell** with `termination_uri` + `sip_trunk_auth_*`, and —
+   when an `--agent-id` is given — **bind the agent** via `inbound_agents`. From here the
+   number places outbound calls through the agent (or any agent you pass to
+   `create-phone-call`) and routes inbound calls to the bound agent. There is **no
+   inbound webhook** (dynamic per-call routing) — the binding is static. Re-running on an
+   already-imported number falls back to `update-phone-number` to (re)bind the agent.
 
 ## Two Twilio API hosts
 

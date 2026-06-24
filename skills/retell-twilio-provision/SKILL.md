@@ -1,28 +1,28 @@
 ---
 name: retell-twilio-provision
-description: Buy a US phone number on Twilio and wire it to a Retell AI agent for OUTBOUND calling over Elastic SIP Trunking — entirely by API, no console clicks, no npm install. Use when the user wants to provision/purchase a phone number for Retell, attach a Twilio number to Retell, or set up a Twilio SIP trunk for Retell outbound dialing.
+description: Create a Retell AI agent, buy a US Twilio number, wire it up over Elastic SIP Trunking, and BIND the agent to the number — entirely by API, no console clicks, no npm install. Use when the user wants to provision/purchase a phone number for Retell, create a Retell agent and attach a number to it, or set up a Twilio SIP trunk for Retell. (No inbound webhook routing — agent binding is static.)
 metadata:
-  version: "2.0.0"
+  version: "3.0.0"
   author: Henryk
   homepage: https://skills.sh
 license: MIT
-compatibility: Requires Node 18+ (for global fetch and --env-file). No other dependencies.
+compatibility: Requires Node 20.6+ (for global fetch and --env-file). No other dependencies.
 ---
 
-# Retell + Twilio Number Provisioning (outbound)
+# Retell + Twilio Provisioning (agent + number)
 
-End-to-end, idempotent setup of a Twilio number for **outbound** calling through a
-Retell AI agent. Everything is done by API (Twilio REST + Retell REST) so it is
-repeatable and scriptable — no Twilio console clicking, no SDKs, no `npm install`.
+End-to-end, idempotent setup: create a Retell agent, buy a Twilio number, build the
+SIP trunk, and bind the agent to the number. All by API (Twilio REST + Retell REST) —
+no console clicking, no SDKs, no `npm install`.
 
 ```
-search a US number  ->  buy it  ->  Elastic SIP Trunk + credentials  ->
-attach number to trunk  ->  import into Retell (termination_uri + SIP auth)
+create Retell agent  ->  search a US number  ->  buy it  ->  Elastic SIP Trunk + creds
+->  attach number to trunk  ->  import into Retell (SIP auth) + BIND the agent
 ```
 
-After it runs, the number can place **outbound** calls through any of your Retell
-agents (you pass the agent id at call time). Inbound webhook routing is intentionally
-out of scope for this skill.
+After it runs, the number can place **outbound** calls through the agent AND routes
+**inbound** calls to the bound agent. The binding is static (`inbound_agents`) — there
+is no inbound *webhook* (dynamic per-call routing), which is intentionally out of scope.
 
 ## Prerequisites
 
@@ -47,28 +47,37 @@ Set these in a `.env` file in the project (the user owns this file — never ope
 ## How to run it
 
 The whole flow is one zero-dependency script: `scripts/provision.mjs`. Drive it in
-three steps.
+four steps.
 
-1. **Search** for a number (free, read-only). Optionally filter by area code:
+1. **Create the agent** (free). Uses the bundled `references/agent.default.json`
+   template (override the spoken name / voice if asked). Note the printed `agent_id`:
+   ```bash
+   node --env-file=.env scripts/provision.mjs create-agent --name "My Assistant"
+   ```
+   If the user already has a Retell agent, skip this and use their `agent_id`.
+
+2. **Search** for a number (free, read-only). Optionally filter by area code:
    ```bash
    node --env-file=.env scripts/provision.mjs search --area 240
    ```
 
-2. **Confirm cost, then buy.** Buying spends money (~$1/mo). ALWAYS confirm the
+3. **Confirm cost, then buy.** Buying spends money (~$1/mo). ALWAYS confirm the
    chosen number with the user before running `buy`:
    ```bash
    node --env-file=.env scripts/provision.mjs buy --number +1XXXXXXXXXX
    ```
 
-3. **Provision** the bought number into the trunk + Retell:
+4. **Provision + bind.** Build the trunk, import into Retell, and bind the agent to
+   the number (pass the `agent_id` from step 1):
    ```bash
-   node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX
+   node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX --agent-id agent_...
    ```
 
 The `provision` step prints a result JSON. If `generatedCredentials` is `true`,
 **save `sipUsername` + `sipPassword`** — Twilio never returns the password again. To
 re-run later (or add another number to the same trunk), pass them back with
-`--sip-user` / `--sip-pass`.
+`--sip-user` / `--sip-pass`. Omitting `--agent-id` provisions the number outbound-only
+(no agent bound).
 
 ## Critical gotchas
 
@@ -91,6 +100,7 @@ both Read and Bash deny rules.
 ## Reference files
 
 - [Annotated provisioning walkthrough](./references/twilio-provision.md)
+- Agent template (edit to customize): [`references/agent.default.json`](./references/agent.default.json)
 - Script: [`scripts/provision.mjs`](./scripts/provision.mjs)
 - Env template: [`.env.example`](./.env.example)
 - `.env` protection: [`templates/settings.json`](./templates/settings.json)

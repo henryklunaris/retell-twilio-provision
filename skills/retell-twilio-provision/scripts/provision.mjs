@@ -1,20 +1,27 @@
 /*
  * retell-twilio-provision — zero-dependency Twilio -> Retell number provisioning.
  *
- * Sets up a US phone number for OUTBOUND dialing through a Retell AI agent over
- * Twilio Elastic SIP Trunking, entirely by API. No inbound webhook wiring.
+ * Creates a Retell agent, buys a US number, sets up Twilio Elastic SIP Trunking,
+ * and BINDS the agent to the number — entirely by API. The number can place
+ * outbound calls AND routes inbound calls to the bound agent. No inbound webhook.
  *
- * Requires only Node 18+ (global fetch). NO npm install. Run with --env-file so
- * secrets are read from .env and never printed:
+ * Requires only Node 20.6+ (global fetch + --env-file). NO npm install. Run with
+ * --env-file so secrets are read from .env and never printed:
  *
+ *   node --env-file=.env scripts/provision.mjs create-agent
  *   node --env-file=.env scripts/provision.mjs search --area 240
- *   node --env-file=.env scripts/provision.mjs buy --number +1XXXXXXXXXX        (COSTS MONEY)
- *   node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX
+ *   node --env-file=.env scripts/provision.mjs buy --number +1XXXXXXXXXX            (COSTS MONEY)
+ *   node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX --agent-id agent_...
  *
  * Env (in .env):
  *   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, RETELL_API_KEY
  */
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 
 const TRUNKING_BASE = 'https://trunking.twilio.com/v1';
 const API_BASE = 'https://api.twilio.com/2010-04-01';
@@ -97,7 +104,33 @@ async function buy(number) {
   return { sid: bought.sid, phoneNumber: bought.phone_number };
 }
 
-async function provision(number, { sipUsername, sipPassword } = {}) {
+async function createAgent({ name, voice } = {}) {
+  if (!RETELL_KEY) throw new Error('RETELL_API_KEY must be set in .env.');
+  const tplPath = join(SCRIPT_DIR, '..', 'references', 'agent.default.json');
+  const tpl = JSON.parse(readFileSync(tplPath, 'utf8'));
+  const llmCfg = tpl.llm || {};
+
+  // 1. Create the Retell LLM (prompt + behaviour).
+  const llm = await retell('POST', '/create-retell-llm', {
+    model: llmCfg.model,
+    model_temperature: llmCfg.model_temperature,
+    general_prompt: llmCfg.general_prompt,
+    begin_message: llmCfg.begin_message,
+    general_tools: llmCfg.general_tools,
+  });
+
+  // 2. Create the agent that uses it. No webhook_url — webhooks are out of scope.
+  const agent = await retell('POST', '/create-agent', {
+    response_engine: { type: 'retell-llm', llm_id: llm.llm_id },
+    voice_id: voice || tpl.voice_id,
+    agent_name: name || tpl.agent_name,
+    language: tpl.language || 'en-US',
+  });
+
+  return { agent_id: agent.agent_id, llm_id: llm.llm_id };
+}
+
+async function provision(number, { sipUsername, sipPassword, agentId } = {}) {
   requireTwilio();
   if (!RETELL_KEY) throw new Error('RETELL_API_KEY must be set in .env.');
   if (!number?.startsWith('+')) throw new Error('--number must be E.164 (e.g. +15555550123).');
@@ -179,22 +212,32 @@ async function provision(number, { sipUsername, sipPassword } = {}) {
     log(`✓ Attached ${number} to the trunk.`);
   }
 
-  // 6. Import the number into Retell for OUTBOUND (termination_uri + SIP auth).
-  //    No inbound_webhook_url / inbound_agents — outbound-only by design.
+  // 6. Import the number into Retell (termination_uri + SIP auth for outbound).
+  //    If an agent id is given, BIND it via inbound_agents so the number routes
+  //    inbound calls to that agent — WITHOUT an inbound_webhook_url.
+  const inboundAgents = agentId ? [{ agent_id: agentId, weight: 1 }] : undefined;
   try {
     await retell('POST', '/import-phone-number', {
       phone_number: number,
       termination_uri: terminationUri,
       sip_trunk_auth_username: sipUsername,
       ...(sipPassword ? { sip_trunk_auth_password: sipPassword } : {}),
+      ...(inboundAgents ? { inbound_agents: inboundAgents } : {}),
       nickname,
     });
-    log(`✓ Imported ${number} into Retell (outbound ready).`);
+    log(`✓ Imported ${number} into Retell${agentId ? ` + bound agent ${agentId}` : ''} (outbound ready).`);
   } catch (error) {
     log(`• Retell import skipped (likely already imported): ${error?.message ?? error}`);
+    // Already imported: still (re)bind the agent if one was requested.
+    if (inboundAgents) {
+      await retell('PATCH', `/update-phone-number/${encodeURIComponent(number)}`, {
+        inbound_agents: inboundAgents,
+      });
+      log(`✓ Bound agent ${agentId} to ${number} (no inbound webhook).`);
+    }
   }
 
-  return { e164: number, trunkSid: trunk.sid, terminationUri, sipUsername, sipPassword, generatedCredentials };
+  return { e164: number, agentId: agentId ?? null, trunkSid: trunk.sid, terminationUri, sipUsername, sipPassword, generatedCredentials };
 }
 
 // --- CLI ---------------------------------------------------------------------
@@ -216,7 +259,12 @@ const args = parseArgs(process.argv.slice(2));
 const cmd = args._[0];
 
 try {
-  if (cmd === 'search') {
+  if (cmd === 'create-agent') {
+    const r = await createAgent({ name: args.name, voice: args.voice });
+    console.log(JSON.stringify(r, null, 2));
+    console.log('\nNext: buy a number, then provision + bind this agent:');
+    console.log(`  node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX --agent-id ${r.agent_id}`);
+  } else if (cmd === 'search') {
     const results = await search({ areaCode: args.area, contains: args.contains, limit: Number(args.limit) || 20 });
     if (results.length === 0) console.log('No numbers found for that filter.');
     else console.log(JSON.stringify(results, null, 2));
@@ -229,6 +277,7 @@ try {
     const result = await provision(args.number, {
       sipUsername: args['sip-user'],
       sipPassword: args['sip-pass'],
+      agentId: args['agent-id'],
     });
     console.log('\n--- RESULT ---');
     console.log(JSON.stringify(result, null, 2));
@@ -238,9 +287,10 @@ try {
   } else {
     console.log(
       'Usage:\n' +
+        '  node --env-file=.env scripts/provision.mjs create-agent [--name "My Agent"] [--voice retell-Cimo]\n' +
         '  node --env-file=.env scripts/provision.mjs search --area 240 [--contains 555] [--limit 20]\n' +
         '  node --env-file=.env scripts/provision.mjs buy --number +1XXXXXXXXXX        (COSTS MONEY)\n' +
-        '  node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX [--sip-user U --sip-pass P]',
+        '  node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX --agent-id agent_... [--sip-user U --sip-pass P]',
     );
     process.exit(1);
   }
