@@ -4,8 +4,7 @@ A Claude Code **skill** that creates a **Retell** AI agent, buys a US **Twilio**
 wires it over Elastic SIP Trunking, and **binds the agent to the number** — entirely by
 API. No Twilio/Retell console clicking, no SDKs, **no `npm install`** (just Node 20.6+).
 
-Setting this up by hand across the Twilio + Retell dashboards is fiddly. This makes it a
-few commands the agent runs for you.
+Setting this up by hand across the Twilio + Retell dashboards is fiddly and for beginners can take hours! This makes it a few commands the agent runs for you.
 
 ## 3 steps
 
@@ -17,19 +16,13 @@ Via [skills.sh](https://skills.sh):
 npx skills add henryklunaris/retell-twilio-provision
 ```
 
-> ⚠️ **You MUST select "Claude Code" in the agent picker.** `npx skills` is a
-> cross-agent tool — it lists ~72 agents and defaults to a neutral `~/.agents/skills/`
-> path that **Claude Code does not read**. When it asks *"Which agents do you want to
-> install to?"*, scroll to **Claude Code** and toggle it (spacebar) before confirming.
->
-> If Claude still doesn't see it, install manually (always works):
->
-> ```bash
-> git clone https://github.com/henryklunaris/retell-twilio-provision /tmp/rtp \
->   && cp -R /tmp/rtp/skills/retell-twilio-provision ~/.claude/skills/
-> ```
->
-> Restart Claude Code afterward — skills load at session start.
+If the above doesn't install a .claude/skills file into your project then just remove the installed files and try again with:  
+
+```bash
+npx skills add henryklunaris/retell-twilio-provision -a claude-code -s '*' -y --copy
+```
+
+This will follow Claude Codes structure it requires
 
 **2. Add your API keys**
 
@@ -69,25 +62,6 @@ and shell) by default:
   }
 }
 ```
-
-## Run it directly (without Claude)
-
-```bash
-node --env-file=.env scripts/provision.mjs create-agent --name "My Assistant"
-node --env-file=.env scripts/provision.mjs search --area 240
-node --env-file=.env scripts/provision.mjs buy --number +1XXXXXXXXXX                 # costs ~$1/mo
-node --env-file=.env scripts/provision.mjs provision --number +1XXXXXXXXXX --agent-id agent_...
-```
-
-Save the printed `sipUsername` / `sipPassword` the first time — Twilio never returns
-the password again. (Already have a Retell agent? Skip `create-agent` and pass its id.)
-
-## Scope
-
-- ✅ Create a Retell agent, buy a US number, build the Twilio SIP trunk, import into
-  Retell, and **bind the agent** to the number (static `inbound_agents`).
-- ✅ Number does **outbound** through the agent and **inbound** to the bound agent.
-- ❌ No inbound *webhook* (dynamic per-call routing) — kept deliberately simple.
 
 ## License
 

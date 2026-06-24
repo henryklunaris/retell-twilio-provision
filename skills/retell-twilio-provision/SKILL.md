@@ -1,11 +1,9 @@
 ---
 name: retell-twilio-provision
-description: Create a Retell AI agent, buy a US Twilio number, wire it up over Elastic SIP Trunking, and BIND the agent to the number — entirely by API, no console clicks, no npm install. Use when the user wants to provision/purchase a phone number for Retell, create a Retell agent and attach a number to it, or set up a Twilio SIP trunk for Retell. (No inbound webhook routing — agent binding is static.)
+description: Create a Retell AI agent, buy a US Twilio number, wire it up over Elastic SIP Trunking, and BIND the agent to the number — entirely by API. Use when the user wants to provision/purchase a phone number for Retell, create a Retell agent and attach a number to it, or set up a Twilio SIP trunk for Retell.
 metadata:
-  version: "3.0.0"
-  author: Henryk
-  homepage: https://skills.sh
-license: MIT
+  version: "4.0.0"
+  author: Henryk Brzozowski
 compatibility: Requires Node 20.6+ (for global fetch and --env-file). No other dependencies.
 ---
 
@@ -21,8 +19,7 @@ create Retell agent  ->  search a US number  ->  buy it  ->  Elastic SIP Trunk +
 ```
 
 After it runs, the number can place **outbound** calls through the agent AND routes
-**inbound** calls to the bound agent. The binding is static (`inbound_agents`) — there
-is no inbound *webhook* (dynamic per-call routing), which is intentionally out of scope.
+**inbound** calls to the bound agent. The binding is static (`inbound_agents`)
 
 ## Prerequisites
 
@@ -36,15 +33,9 @@ Set these in a `.env` file in the project (the user owns this file — never ope
 
 ## 🔒 Secret handling (do this, always)
 
-- **Never read `.env`** (or `.env.*`). Do not `cat`, `grep`, open, or print it. You
-  only need the variable *names*, never the values.
-- Always run the script with **`node --env-file=.env`** so Node injects the secrets
-  directly into the process — they never enter your context or the chat.
-- **Never read the `retell-sip-*.local.json` files.** On provision, the script writes
-  the generated SIP credentials to such a file (so the password never hits stdout /
-  your context). Tell the user the file path; never open or print its contents.
-- This skill ships `templates/settings.json` with deny rules that block reading `.env`
-  AND `retell-sip-*.local.json`. Offer to merge it into the project's
+- **Never read `.env`** 
+- Always run the script with **`node --env-file=.env`** so Node injects the secrets directly into the process
+- This skill ships `templates/settings.json` with deny rules that block reading `.env` AND `retell-sip-*.local.json`. Offer to merge it into the project's
   `.claude/settings.json` so the user is protected by default (see below).
 
 ## How to run it
@@ -77,33 +68,20 @@ four steps.
    ```
 
 The `provision` step prints a redacted result JSON. When Twilio generates fresh SIP
-credentials, the script **writes them to a local `retell-sip-<last4>.local.json` file
-(mode 0600) instead of printing them** — so the password stays out of logs and your
-context. Point the user to that file and tell them to keep it safe + gitignore it
-(Twilio never returns the password again). To re-run later (or add another number to
-the same trunk), pass the saved values back with `--sip-user` / `--sip-pass`. Omitting
+credentials, the script **writes them to a local `retell-sip-<last4>.local.json` file. Point the user to that file and tell them to keep it safe + gitignore it (Twilio never returns the password again). To re-run later (or add another number to the same trunk), pass the saved values back with `--sip-user` / `--sip-pass`. Omitting
 `--agent-id` provisions the number outbound-only (no agent bound).
 
-> ⚠️ Do **not** open or `cat` the `retell-sip-*.local.json` file — it holds the live
-> SIP password. The user already has it; you never need its contents.
+## Critical gotchas/rules
 
-## Critical gotchas
-
-- **Idempotent, but the SIP password is write-once.** Re-running is safe — the trunk,
-  credential list, origination URL, and number attachment are all find-or-create. The
-  one thing Twilio won't return again is the SIP password (see step 3).
+- **Idempotent, but the SIP password is write-once.** Re-running is safe — the trunk, credential list, origination URL, and number attachment are all find-or-create. The one thing Twilio won't return again is the SIP password (see step 3).
 - **`buy` spends money.** Never call it without explicit user confirmation.
-- **Two Twilio hosts.** Trunk + sub-resources live on `trunking.twilio.com/v1`; number
-  lookup + SIP credential lists live on `api.twilio.com/2010-04-01` (needs `.json`).
-  Handled inside the script — just know it if you debug a 404.
+- **Two Twilio hosts.** Trunk + sub-resources live on `trunking.twilio.com/v1`; number lookup + SIP credential lists live on `api.twilio.com/2010-04-01` (needs `.json`). Handled inside the script — just know it if you debug a 404.
+
+### Other gotchas
+The user might want to buy a EU or other type of number, for now, we can only do US. If there are any failed attempts with anything, the user should have credits in their twilio account for buying a number.
 
 ## Protect the user's .env
-
-Offer to copy this skill's `templates/settings.json` deny rules into the project's
-`.claude/settings.json` (merging, not overwriting). They stop Claude Code from reading
-`.env` / `.env.*` via the file tools AND via shell (`cat`/`grep`/etc.). Note: a
-`Read(...)` deny alone does not block a shell `cat`, which is why the template includes
-both Read and Bash deny rules.
+Offer to copy this skill's `templates/settings.json` deny rules into the project's `.claude/settings.json` (merging, not overwriting).
 
 ## Reference files
 
