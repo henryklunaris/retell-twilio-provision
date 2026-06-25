@@ -1,12 +1,23 @@
-# retell-twilio-provision
+# Voice AI phone provisioning skills
 
-A Claude Code **skill** that creates a **Retell** AI agent, buys a US **Twilio** number,
-wires it over Elastic SIP Trunking, and **binds the agent to the number** — entirely by
-API. No Twilio/Retell console clicking, no SDKs, **no `npm install`** (just Node 20.6+).
+Claude Code **skills** for voice AI phone provisioning and transfer setup. The original
+skill creates a **Retell** AI agent, buys a US **Twilio** number, wires it over Elastic
+SIP Trunking, and **binds the agent to the number** — entirely by API. No
+Twilio/Retell console clicking, no SDKs, **no `npm install`** (just Node 20.6+).
+
+This repo also includes ElevenLabs skills for importing Twilio/SIP trunk numbers,
+configuring Telnyx or Zadarma trunk settings, testing outbound calls, and rendering
+provider-specific `transfer_to_number` JSON.
 
 Setting this up by hand across the Twilio + Retell dashboards is fiddly and for beginners can take hours! This makes it a few commands the agent runs for you.
 
-## 3 steps
+## Included skills
+
+- `retell-twilio-provision` — Retell agent + US Twilio number + Elastic SIP trunk.
+- `elevenlabs-phone-provider-setup` — ElevenLabs Twilio/SIP import, Telnyx/Zadarma trunk config, agent assignment, outbound smoke test.
+- `elevenlabs-transfer-outbound-setup` — ElevenLabs transfer mode selection and JSON rendering for Twilio, Telnyx, and Zadarma.
+
+## Retell in 3 steps
 
 **1. Install the skill**
 
@@ -32,6 +43,7 @@ Copy `.env.example` to `.env` and fill in:
 TWILIO_ACCOUNT_SID=AC...
 TWILIO_AUTH_TOKEN=...
 RETELL_API_KEY=key_...
+ELEVENLABS_API_KEY=sk_...
 ```
 
 **3. Ask Claude**
@@ -44,7 +56,7 @@ through the agent and routes inbound calls to it (no webhook).
 
 ## 🔒 Your `.env` stays private
 
-The skill **never reads your `.env`**. It runs the script with `node --env-file=.env`,
+The skills **never read your `.env`**. They run scripts with `node --env-file=.env`,
 so Node injects the secrets straight into the process — they never enter the chat.
 
 It also ships `templates/settings.json` with deny rules. Merge them into your
